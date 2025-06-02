@@ -21,9 +21,7 @@ class Player:
     def update(self):
         self.x += self.change_x
         self.y += self.change_y
-        # Keep player on screen
-        self.x = max(PLAYER_RADIUS, min(self.x, 800 - PLAYER_RADIUS))
-        self.y = max(PLAYER_RADIUS, min(self.y, 600 - PLAYER_RADIUS))
+        # No screen constraints for infinite scrolling
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.LEFT or key == arcade.key.A:
