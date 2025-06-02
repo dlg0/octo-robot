@@ -1,0 +1,13 @@
+[project]
+name = "octo-robot"
+version = "0.1.0"
+description = "A 2D adventure game where a robotic octopus explores, collects, and upgrades."
+dependencies = [
+    "arcade>=3.2.0",
+]
+
+[project.scripts]
+octo-robot = "main:main_entry"
+
+[tool.setuptools.packages.find]
+where = ["src"] 
