@@ -63,6 +63,7 @@ class OctoRobotGame(arcade.Window):
         
         # Initialize game systems
         self.player = Player()
+        print("Player class:", type(self.player), "module:", type(self.player).__module__)
         self.item_manager = ItemManager()
         self.obstacle_manager = ObstacleManager()
         self.background_manager = BackgroundManager()
@@ -110,7 +111,7 @@ class OctoRobotGame(arcade.Window):
         logger.info(f"Timestamp: {start_time}")
         logger.info(f"Current state - fullscreen: {self.is_fullscreen}, size: {self.width}x{self.height}")
         logger.info(f"Camera position: {self.camera.position}")
-        logger.info(f"Player position: ({self.player.x}, {self.player.y})")
+        logger.info(f"Player position: ({self.player.center_x}, {self.player.center_y})")
         
         pre_change_time = time.time()
         logger.info(f"Pre-change time: {pre_change_time - start_time:.4f}s")
@@ -221,6 +222,7 @@ class OctoRobotGame(arcade.Window):
         """Render the game"""
         import time
         frame_start = time.time()
+        DEBUG_ENABLED = True  # Set to True to print camera position for debugging
         
         logger.debug(f"=== DRAW FRAME START ===")
         logger.debug(f"Frame timestamp: {frame_start}")
@@ -236,6 +238,8 @@ class OctoRobotGame(arcade.Window):
         # Get camera position for rendering
         camera_x, camera_y = self.camera.position
         screen_width, screen_height = self.get_screen_dimensions()
+        if DEBUG_ENABLED:
+            print(f"[DEBUG] Camera pos: ({camera_x}, {camera_y})")
         
         logger.debug(f"Camera position: ({camera_x}, {camera_y})")
         logger.debug(f"Viewport: {screen_width}x{screen_height}")
@@ -301,16 +305,16 @@ class OctoRobotGame(arcade.Window):
     def update_world_generation(self):
         """Update procedural generation around the player"""
         logger.debug(f"=== WORLD GENERATION START ===")
-        logger.debug(f"Player position: ({self.player.x}, {self.player.y})")
+        logger.debug(f"Player position: ({self.player.center_x}, {self.player.center_y})")
         logger.debug(f"Camera position: {self.camera.position}")
         
         # Generate items around player position
         logger.debug("Generating items...")
-        self.item_manager.update_generation(self.player.x, self.player.y)
+        self.item_manager.update_generation(self.player.center_x, self.player.center_y)
         
         # Generate obstacles around player position
         logger.debug("Generating obstacles...")
-        self.obstacle_manager.update_generation(self.player.x, self.player.y)
+        self.obstacle_manager.update_generation(self.player.center_x, self.player.center_y)
         
         # Generate background around camera position
         camera_x, camera_y = self.camera.position
@@ -343,15 +347,15 @@ class OctoRobotGame(arcade.Window):
         target_y = self.camera.position[1]
 
         # Check if player is outside margins and adjust camera
-        if self.player.x < left_boundary:
-            target_x = self.player.x - margin_x + screen_width / 2
-        elif self.player.x > right_boundary:
-            target_x = self.player.x + margin_x - screen_width / 2
+        if self.player.center_x < left_boundary:
+            target_x = self.player.center_x - margin_x + screen_width / 2
+        elif self.player.center_x > right_boundary:
+            target_x = self.player.center_x + margin_x - screen_width / 2
 
-        if self.player.y < bottom_boundary:
-            target_y = self.player.y - margin_y + screen_height / 2
-        elif self.player.y > top_boundary:
-            target_y = self.player.y + margin_y - screen_height / 2
+        if self.player.center_y < bottom_boundary:
+            target_y = self.player.center_y - margin_y + screen_height / 2
+        elif self.player.center_y > top_boundary:
+            target_y = self.player.center_y + margin_y - screen_height / 2
 
         # Smooth camera movement for better experience
         current_x, current_y = self.camera.position

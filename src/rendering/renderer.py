@@ -3,6 +3,9 @@ import math
 from game.item_manager import ITEM_RADIUS, ITEM_TYPES
 from game.player import PLAYER_RADIUS
 from game.obstacle_manager import OBSTACLE_TYPES
+import logging
+
+DEBUG_ENABLED = True  # Set to True to enable debug output for player drawing
 
 class Renderer:
     def __init__(self, player, item_manager, obstacle_manager=None, background_manager=None):
@@ -37,67 +40,26 @@ class Renderer:
             )
 
     def draw_player(self):
-        """Draw the player with enhanced visual design"""
-        # Main body
-        arcade.draw_circle_filled(self.player.x, self.player.y, PLAYER_RADIUS, arcade.color.PURPLE_HEART)
-        
-        # Outer ring for depth
-        arcade.draw_circle_outline(self.player.x, self.player.y, PLAYER_RADIUS + 2, arcade.color.PURPLE, 2)
-        
-        # Eyes
-        eye_offset_x = 8
-        eye_offset_y = 8
-        eye_size = 4
-        pupil_size = 2
-        
-        # Left eye
-        arcade.draw_circle_filled(self.player.x - eye_offset_x, self.player.y + eye_offset_y, eye_size, arcade.color.WHITE)
-        arcade.draw_circle_filled(self.player.x - eye_offset_x, self.player.y + eye_offset_y, pupil_size, arcade.color.BLACK)
-        
-        # Right eye
-        arcade.draw_circle_filled(self.player.x + eye_offset_x, self.player.y + eye_offset_y, eye_size, arcade.color.WHITE)
-        arcade.draw_circle_filled(self.player.x + eye_offset_x, self.player.y + eye_offset_y, pupil_size, arcade.color.BLACK)
-        
-        # Antenna/details
-        arcade.draw_line(self.player.x, self.player.y + PLAYER_RADIUS, 
-                        self.player.x, self.player.y + PLAYER_RADIUS + 10, 
-                        arcade.color.PURPLE, 3)
-        arcade.draw_circle_filled(self.player.x, self.player.y + PLAYER_RADIUS + 12, 3, arcade.color.RED)
+        """Draw the player sprite."""
+        if self.player:
+            if DEBUG_ENABLED:
+                print(f"[DEBUG] Player pos: ({self.player.center_x}, {self.player.center_y}), alpha: {getattr(self.player, 'alpha', 'N/A')}, scale: {getattr(self.player, 'scale', 'N/A')}, texture: {self.player.texture}, visible: {getattr(self.player, 'visible', 'N/A')}")
+                # Draw a fallback circle at the player's position
+                arcade.draw_circle_filled(self.player.center_x, self.player.center_y, PLAYER_RADIUS, arcade.color.RED)
+            arcade.SpriteList([self.player]).draw()
+        # The old detailed drawing logic (eyes, antenna) is now part of the Player sprite's texture
+        # or could be added as sub-sprites to the Player if dynamic elements were needed.
 
     def draw_items(self, camera_x=0, camera_y=0, screen_width=800, screen_height=600):
-        """Draw items near the camera position"""
-        # Calculate culling radius based on the larger screen dimension to ensure all visible items are fetched.
-        # Add a small buffer just in case.
-        culling_radius = max(screen_width, screen_height) * 0.75 # Ensure items up to the corners are included
-        if culling_radius < 1000: # ensure a minimum culling distance
-            culling_radius = 1000
-
-        if hasattr(self.item_manager, 'get_active_items_near'):
-            # Use optimized rendering for large worlds
-            items = self.item_manager.get_active_items_near(camera_x, camera_y, culling_radius)
+        """Draw items using the ItemManager's SpriteList."""
+        # The ItemManager now handles its own SpriteList.
+        # We just need to tell it to draw.
+        if self.item_manager and hasattr(self.item_manager, 'item_sprite_list'):
+            self.item_manager.item_sprite_list.draw()
         else:
-            # Fallback for compatibility
-            items = self.item_manager.get_active_items()
-        
-        for item in items:
-            item_props = ITEM_TYPES[item.type]
-            color = item_props["color"]
-            
-            # Draw item with enhanced visuals based on type
-            if item.type == "battery":
-                self.draw_battery(item.x, item.y, color)
-            elif item.type == "gear":
-                self.draw_gear(item.x, item.y, color)
-            elif item.type == "gem":
-                self.draw_gem(item.x, item.y, color)
-            elif item.type == "crystal":
-                self.draw_crystal(item.x, item.y, color)
-            elif item.type == "power_core":
-                self.draw_power_core(item.x, item.y, color)
-            else:
-                # Default circular item
-                arcade.draw_circle_filled(item.x, item.y, ITEM_RADIUS, color)
-                arcade.draw_circle_outline(item.x, item.y, ITEM_RADIUS, arcade.color.WHITE, 2)
+            # Fallback or error if item_manager or sprite_list is not set up as expected
+            # This part can be enhanced with logging or more robust error handling
+            pass
 
     def draw_battery(self, x, y, color):
         """Draw a battery collectible"""
@@ -178,32 +140,13 @@ class Renderer:
         arcade.draw_circle_filled(x, y, ITEM_RADIUS * 0.4, arcade.color.WHITE)
 
     def draw_obstacles(self, camera_x=0, camera_y=0, screen_width=800, screen_height=600):
-        """Draw obstacles near the camera position"""
-        if not self.obstacle_manager:
-            return
-        
-        # Calculate culling radius based on the larger screen dimension.
-        culling_radius = max(screen_width, screen_height) * 0.75 # Ensure obstacles up to the corners are included
-        if culling_radius < 1000: # ensure a minimum culling distance
-            culling_radius = 1000
-            
-        obstacles = self.obstacle_manager.get_active_obstacles_near(camera_x, camera_y, culling_radius)
-        
-        for obstacle in obstacles:
-            obstacle_props = OBSTACLE_TYPES[obstacle.type]
-            color = obstacle_props["color"]
-            
-            if obstacle.type == "rock":
-                self.draw_rock(obstacle.x, obstacle.y, obstacle.radius, color)
-            elif obstacle.type == "tree":
-                self.draw_tree(obstacle.x, obstacle.y, obstacle.radius, color)
-            elif obstacle.type == "crystal_formation":
-                self.draw_crystal_formation(obstacle.x, obstacle.y, obstacle.radius, color)
-            elif obstacle.type == "metal_debris":
-                self.draw_metal_debris(obstacle.x, obstacle.y, obstacle.radius, color)
-            else:
-                # Default circular obstacle
-                arcade.draw_circle_filled(obstacle.x, obstacle.y, obstacle.radius, color)
+        """Draw obstacles using the ObstacleManager's SpriteList."""
+        # The ObstacleManager now handles its own SpriteList for drawing.
+        if self.obstacle_manager and hasattr(self.obstacle_manager, 'obstacle_sprite_list'):
+            self.obstacle_manager.obstacle_sprite_list.draw()
+        else:
+            # Fallback or error, e.g., if obstacle_manager is None or not set up with a sprite list
+            pass # Consider logging an error or warning here if in debug mode
 
     def draw_rock(self, x, y, radius, color):
         """Draw a rock obstacle"""
