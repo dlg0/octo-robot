@@ -20,12 +20,7 @@ A 2D adventure game where you control a robotic octopus exploring a world, colle
    curl -Ls https://astral.sh/uv/install.sh | sh
    # or see uv docs for your platform
    ```
-2. **Install dependencies using uv:**
-   ```sh
-   uv pip install -r requirements.txt
-   ```
 
-## Running the Game
 Start the game using the only supported method:
 ```sh
 uv run octo-robot

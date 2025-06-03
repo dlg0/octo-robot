@@ -1,7 +1,7 @@
 import arcade
 import math
 
-PLAYER_SPEED = 5
+PLAYER_SPEED = 10 
 PLAYER_RADIUS = 25
 START_X = 100
 START_Y = 100

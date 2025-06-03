@@ -7,7 +7,7 @@ dependencies = [
 ]
 
 [project.scripts]
-octo-robot = "main:main_entry"
+octo-robot = "main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"] 

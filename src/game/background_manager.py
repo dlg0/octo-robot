@@ -1,6 +1,9 @@
 import arcade
 import random
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 class BackgroundLayer:
     """A single layer of the background that can scroll infinitely"""
@@ -107,20 +110,29 @@ class BackgroundManager:
 
     def draw_background(self, camera_x, camera_y, screen_width, screen_height):
         """Draw the infinite scrolling background"""
-        # Draw base background
+        logger.debug(f"Drawing background - camera: ({camera_x}, {camera_y}), screen: {screen_width}x{screen_height}")
+        
+        # Draw base background with extra large buffer for fullscreen transitions
+        buffer_size = max(500, max(screen_width, screen_height) * 0.5)
         view_left = camera_x - screen_width / 2
         view_right = camera_x + screen_width / 2
         view_bottom = camera_y - screen_height / 2
         view_top = camera_y + screen_height / 2
         
-        # Sky background
+        logger.debug(f"Buffer size: {buffer_size}")
+        logger.debug(f"View bounds: left={view_left}, right={view_right}, bottom={view_bottom}, top={view_top}")
+        logger.debug(f"Background rect: {view_left - buffer_size} to {view_right + buffer_size}, {view_bottom - buffer_size} to {view_top + buffer_size}")
+        
+        # Sky background - ensure it covers the entire viewport and more
         arcade.draw_rect_filled(
-            arcade.LRBT(view_left - 200, view_right + 200, view_bottom - 200, view_top + 200),
+            arcade.LRBT(view_left - buffer_size, view_right + buffer_size, 
+                       view_bottom - buffer_size, view_top + buffer_size),
             self.base_colors[1]
         )
         
         # Draw each layer from back to front
-        for layer in reversed(self.layers):  # Draw back to front
+        for i, layer in enumerate(reversed(self.layers)):  # Draw back to front
+            logger.debug(f"Drawing layer {i} (depth {layer.depth})")
             self.draw_layer(layer, camera_x, camera_y, screen_width, screen_height)
 
     def draw_layer(self, layer, camera_x, camera_y, screen_width, screen_height):

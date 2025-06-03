@@ -16,7 +16,8 @@ class Renderer:
         if self.background_manager:
             self.background_manager.draw_background(camera_x, camera_y, screen_width, screen_height)
         else:
-            # Fallback simple background
+            # Fallback simple background with large buffer for fullscreen transitions
+            buffer_size = max(500, max(screen_width, screen_height) * 0.5)
             view_left = camera_x - screen_width / 2
             view_right = camera_x + screen_width / 2
             view_bottom = camera_y - screen_height / 2
@@ -24,12 +25,14 @@ class Renderer:
             
             # Sky background
             arcade.draw_rect_filled(
-                arcade.LRBT(view_left - 200, view_right + 200, view_bottom - 200, view_top + 200),
+                arcade.LRBT(view_left - buffer_size, view_right + buffer_size, 
+                           view_bottom - buffer_size, view_top + buffer_size),
                 arcade.color.SKY_BLUE
             )
             # Simple ground
             arcade.draw_rect_filled(
-                arcade.LRBT(view_left - 200, view_right + 200, view_bottom - 200, view_bottom + 100),
+                arcade.LRBT(view_left - buffer_size, view_right + buffer_size, 
+                           view_bottom - buffer_size, view_bottom + 100),
                 arcade.color.DARK_SPRING_GREEN
             )
 
@@ -61,11 +64,17 @@ class Renderer:
                         arcade.color.PURPLE, 3)
         arcade.draw_circle_filled(self.player.x, self.player.y + PLAYER_RADIUS + 12, 3, arcade.color.RED)
 
-    def draw_items(self, camera_x=0, camera_y=0):
+    def draw_items(self, camera_x=0, camera_y=0, screen_width=800, screen_height=600):
         """Draw items near the camera position"""
+        # Calculate culling radius based on the larger screen dimension to ensure all visible items are fetched.
+        # Add a small buffer just in case.
+        culling_radius = max(screen_width, screen_height) * 0.75 # Ensure items up to the corners are included
+        if culling_radius < 1000: # ensure a minimum culling distance
+            culling_radius = 1000
+
         if hasattr(self.item_manager, 'get_active_items_near'):
             # Use optimized rendering for large worlds
-            items = self.item_manager.get_active_items_near(camera_x, camera_y, 1000)
+            items = self.item_manager.get_active_items_near(camera_x, camera_y, culling_radius)
         else:
             # Fallback for compatibility
             items = self.item_manager.get_active_items()
@@ -168,12 +177,17 @@ class Renderer:
         # Center
         arcade.draw_circle_filled(x, y, ITEM_RADIUS * 0.4, arcade.color.WHITE)
 
-    def draw_obstacles(self, camera_x=0, camera_y=0):
+    def draw_obstacles(self, camera_x=0, camera_y=0, screen_width=800, screen_height=600):
         """Draw obstacles near the camera position"""
         if not self.obstacle_manager:
             return
+        
+        # Calculate culling radius based on the larger screen dimension.
+        culling_radius = max(screen_width, screen_height) * 0.75 # Ensure obstacles up to the corners are included
+        if culling_radius < 1000: # ensure a minimum culling distance
+            culling_radius = 1000
             
-        obstacles = self.obstacle_manager.get_active_obstacles_near(camera_x, camera_y, 1000)
+        obstacles = self.obstacle_manager.get_active_obstacles_near(camera_x, camera_y, culling_radius)
         
         for obstacle in obstacles:
             obstacle_props = OBSTACLE_TYPES[obstacle.type]
@@ -257,20 +271,33 @@ class Renderer:
             arcade.draw_rect_filled(arcade.LRBT(piece_left, piece_right, piece_bottom, piece_top), color)
             arcade.draw_rect_outline(arcade.LRBT(piece_left, piece_right, piece_bottom, piece_top), arcade.color.BLACK, 1)
 
-    def draw_ui(self, score, total_value=None, camera_x=0, camera_y=0):
-        """Draw the user interface"""
+    def draw_ui(self, score, total_value=None, camera_x=0, camera_y=0, screen_width=800, screen_height=600):
+        """Draw the user interface that adapts to screen size"""
         # Calculate UI position based on camera for fixed positioning
-        ui_left = camera_x - 400  # Half screen width
-        ui_top = camera_y + 300   # Half screen height
-        ui_bottom = camera_y - 300
+        ui_left = camera_x - screen_width / 2
+        ui_right = camera_x + screen_width / 2
+        ui_top = camera_y + screen_height / 2
+        ui_bottom = camera_y - screen_height / 2
+        
+        # Adaptive font sizes based on screen size
+        base_size = min(screen_width, screen_height)
+        title_font_size = max(16, int(base_size * 0.025))
+        main_font_size = max(14, int(base_size * 0.02))
+        small_font_size = max(12, int(base_size * 0.015))
         
         # Score display (top-left)
-        arcade.draw_text(f"Items Collected: {score}", ui_left + 10, ui_top - 30, arcade.color.BLACK, 20)
+        arcade.draw_text(f"Items Collected: {score}", ui_left + 10, ui_top - 30, 
+                        arcade.color.BLACK, title_font_size)
         
         # Value display if available
         if total_value is not None:
-            arcade.draw_text(f"Total Value: {total_value}", ui_left + 10, ui_top - 55, arcade.color.BLACK, 16)
+            arcade.draw_text(f"Total Value: {total_value}", ui_left + 10, ui_top - 60, 
+                            arcade.color.BLACK, main_font_size)
         
         # Instructions (bottom-left)
-        arcade.draw_text("Use WASD or Arrow Keys to move", ui_left + 10, ui_bottom + 10, arcade.color.BLACK, 14)
-        arcade.draw_text("Press R to reset", ui_left + 10, ui_bottom + 30, arcade.color.BLACK, 14) 
+        arcade.draw_text("Use WASD or Arrow Keys to move", ui_left + 10, ui_bottom + 40, 
+                        arcade.color.BLACK, small_font_size)
+        arcade.draw_text("Press R to reset", ui_left + 10, ui_bottom + 20, 
+                        arcade.color.BLACK, small_font_size)
+        arcade.draw_text("Press F for fullscreen", ui_left + 10, ui_bottom + 10, 
+                        arcade.color.BLACK, small_font_size) 
