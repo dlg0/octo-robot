@@ -6,7 +6,7 @@ from game.obstacle_manager import OBSTACLE_TYPES
 import logging
 from game.config import MARGIN_X, MARGIN_Y
 
-DEBUG_ENABLED = True  # Set to True to enable debug output for player drawing
+DEBUG_ENABLED = False  # Set to True to enable debug output for player drawing
 
 class Renderer:
     def __init__(self, player, item_manager, obstacle_manager=None, background_manager=None):
@@ -45,8 +45,16 @@ class Renderer:
         if self.player:
             if DEBUG_ENABLED:
                 print(f"[DEBUG] Player pos: ({self.player.center_x}, {self.player.center_y}), alpha: {getattr(self.player, 'alpha', 'N/A')}, scale: {getattr(self.player, 'scale', 'N/A')}, texture: {self.player.texture}, visible: {getattr(self.player, 'visible', 'N/A')}")
-                # Draw a fallback circle at the player's position
-                arcade.draw_circle_filled(self.player.center_x, self.player.center_y, PLAYER_RADIUS, arcade.color.RED)
+            
+            # Always draw a fallback circle at the player's position for visibility
+            # Use the player's current color if available
+            if hasattr(self.player, 'color_tuple'):
+                player_color = self.player.color_tuple
+            else:
+                player_color = arcade.color.RED  # Default fallback
+            arcade.draw_circle_filled(self.player.center_x, self.player.center_y, PLAYER_RADIUS, player_color)
+            
+            # Also try to draw the sprite (this should be the main rendering method)
             arcade.SpriteList([self.player]).draw()
         # The old detailed drawing logic (eyes, antenna) is now part of the Player sprite's texture
         # or could be added as sub-sprites to the Player if dynamic elements were needed.
@@ -215,8 +223,8 @@ class Renderer:
             arcade.draw_rect_filled(arcade.LRBT(piece_left, piece_right, piece_bottom, piece_top), color)
             arcade.draw_rect_outline(arcade.LRBT(piece_left, piece_right, piece_bottom, piece_top), arcade.color.BLACK, 1)
 
-    def draw_ui(self, score, total_value=None, camera_x=0, camera_y=0, screen_width=800, screen_height=600):
-        """Draw the user interface that adapts to screen size, and debug rectangles if enabled."""
+    def draw_ui(self, game_state=None, camera_x=0, camera_y=0, screen_width=800, screen_height=600, high_score_manager=None):
+        """Draw the user interface that adapts to screen size and game state."""
         ui_left = camera_x - screen_width / 2
         ui_right = camera_x + screen_width / 2
         ui_top = camera_y + screen_height / 2
@@ -244,23 +252,189 @@ class Renderer:
         
         # Adaptive font sizes based on screen size
         base_size = min(screen_width, screen_height)
-        title_font_size = max(16, int(base_size * 0.025))
+        title_font_size = max(20, int(base_size * 0.035))
+        large_font_size = max(18, int(base_size * 0.03))
         main_font_size = max(14, int(base_size * 0.02))
         small_font_size = max(12, int(base_size * 0.015))
         
+        if game_state is None:
+            # Fallback to old UI if no game state provided
+            arcade.draw_text("No game state provided", ui_left + 10, ui_top - 30, 
+                            arcade.color.RED, main_font_size)
+            return
+        
+        # Draw different UI based on game state
+        if game_state.is_playing():
+            self.draw_playing_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
+                               title_font_size, main_font_size, small_font_size)
+        elif game_state.is_game_over():
+            self.draw_game_over_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
+                                 title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager)
+        elif game_state.is_name_entry():
+            self.draw_name_entry_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
+                                   title_font_size, large_font_size, main_font_size, small_font_size)
+        elif game_state.is_high_scores():
+            self.draw_high_scores_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
+                                   title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager)
+    
+    def draw_playing_ui(self, game_state, ui_left, ui_right, ui_top, ui_bottom, title_font_size, main_font_size, small_font_size):
+        """Draw UI elements during gameplay"""
+        screen_width = ui_right - ui_left  # Calculate screen width from UI bounds
+        
         # Score display (top-left)
-        arcade.draw_text(f"Items Collected: {score}", ui_left + 10, ui_top - 30, 
+        arcade.draw_text(f"Score: {game_state.score}/100", ui_left + 10, ui_top - 30, 
                         arcade.color.BLACK, title_font_size)
         
-        # Value display if available
-        if total_value is not None:
-            arcade.draw_text(f"Total Value: {total_value}", ui_left + 10, ui_top - 60, 
+        # Timer display (top-right)
+        time_text = f"Time: {game_state.game_time:.1f}s"
+        arcade.draw_text(time_text, ui_right - 150, ui_top - 30, 
+                        arcade.color.BLACK, title_font_size)
+        
+        # Current player color (top-center)
+        if hasattr(self.player, 'current_color'):
+            color_text = f"Color: {self.player.current_color.title()}"
+            arcade.draw_text(color_text, ui_left + screen_width//2 - 60, ui_top - 30,
                             arcade.color.BLACK, main_font_size)
         
+        # Goal explanation (top-left, below score)
+        arcade.draw_text("Collect dots matching your color!", ui_left + 10, ui_top - 60, 
+                        arcade.color.DARK_BLUE, main_font_size)
+        arcade.draw_text("Wrong color = color change + score reset", ui_left + 10, ui_top - 80, 
+                        arcade.color.DARK_RED, small_font_size)
+        
         # Instructions (bottom-left)
-        arcade.draw_text("Use WASD or Arrow Keys to move", ui_left + 10, ui_bottom + 40, 
+        arcade.draw_text("Use WASD or Arrow Keys to move", ui_left + 10, ui_bottom + 60, 
                         arcade.color.BLACK, small_font_size)
-        arcade.draw_text("Press R to reset", ui_left + 10, ui_bottom + 20, 
+        arcade.draw_text("Press R to reset", ui_left + 10, ui_bottom + 40, 
                         arcade.color.BLACK, small_font_size)
-        arcade.draw_text("Press F for fullscreen", ui_left + 10, ui_bottom + 10, 
-                        arcade.color.BLACK, small_font_size) 
+        arcade.draw_text("Press F for fullscreen", ui_left + 10, ui_bottom + 20, 
+                        arcade.color.BLACK, small_font_size)
+        arcade.draw_text("Press H to view high scores", ui_left + 10, ui_bottom + 10, 
+                        arcade.color.BLACK, small_font_size)
+    
+    def draw_game_over_ui(self, game_state, ui_left, ui_right, ui_top, ui_bottom, title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager):
+        """Draw game over screen"""
+        center_x = (ui_left + ui_right) / 2
+        center_y = (ui_top + ui_bottom) / 2
+        
+        # Semi-transparent overlay
+        overlay_rect = arcade.LRBT(ui_left, ui_right, ui_bottom, ui_top)
+        arcade.draw_rect_filled(overlay_rect, (0, 0, 0, 128))
+        
+        # Congratulations message
+        arcade.draw_text("GOAL ACHIEVED!", center_x, center_y + 100, 
+                        arcade.color.GOLD, title_font_size, anchor_x="center")
+        
+        # Final score and time
+        arcade.draw_text(f"Final Score: {game_state.final_score}", center_x, center_y + 60, 
+                        arcade.color.WHITE, large_font_size, anchor_x="center")
+        arcade.draw_text(f"Time: {game_state.final_time:.2f} seconds", center_x, center_y + 30, 
+                        arcade.color.WHITE, large_font_size, anchor_x="center")
+        
+        # Check if it's a high score
+        is_high_score = False
+        if high_score_manager:
+            is_high_score = high_score_manager.is_high_score(game_state.final_score, game_state.final_time)
+        
+        if is_high_score:
+            arcade.draw_text("NEW HIGH SCORE!", center_x, center_y - 10, 
+                            arcade.color.YELLOW, large_font_size, anchor_x="center")
+            arcade.draw_text("Press ENTER to enter your name", center_x, center_y - 40, 
+                            arcade.color.WHITE, main_font_size, anchor_x="center")
+        else:
+            arcade.draw_text("Press ENTER to continue", center_x, center_y - 10, 
+                            arcade.color.WHITE, main_font_size, anchor_x="center")
+        
+        # Instructions
+        arcade.draw_text("Press R to play again", center_x, center_y - 80, 
+                        arcade.color.LIGHT_GRAY, small_font_size, anchor_x="center")
+        arcade.draw_text("Press H to view high scores", center_x, center_y - 100, 
+                        arcade.color.LIGHT_GRAY, small_font_size, anchor_x="center")
+    
+    def draw_name_entry_ui(self, game_state, ui_left, ui_right, ui_top, ui_bottom, title_font_size, large_font_size, main_font_size, small_font_size):
+        """Draw name entry screen"""
+        center_x = (ui_left + ui_right) / 2
+        center_y = (ui_top + ui_bottom) / 2
+        
+        # Semi-transparent overlay
+        overlay_rect = arcade.LRBT(ui_left, ui_right, ui_bottom, ui_top)
+        arcade.draw_rect_filled(overlay_rect, (0, 0, 0, 128))
+        
+        # Title
+        arcade.draw_text("HIGH SCORE!", center_x, center_y + 100, 
+                        arcade.color.GOLD, title_font_size, anchor_x="center")
+        
+        # Score display
+        arcade.draw_text(f"Score: {game_state.final_score} - Time: {game_state.final_time:.2f}s", 
+                        center_x, center_y + 60, arcade.color.WHITE, large_font_size, anchor_x="center")
+        
+        # Name entry prompt
+        arcade.draw_text("Enter your name:", center_x, center_y + 20, 
+                        arcade.color.WHITE, main_font_size, anchor_x="center")
+        
+        # Name input box
+        name_box_width = 300
+        name_box_height = 40
+        name_box_left = center_x - name_box_width / 2
+        name_box_right = center_x + name_box_width / 2
+        name_box_bottom = center_y - 20
+        name_box_top = center_y + 20
+        
+        # Draw input box
+        name_box_rect = arcade.LRBT(name_box_left, name_box_right, name_box_bottom, name_box_top)
+        arcade.draw_rect_filled(name_box_rect, arcade.color.WHITE)
+        arcade.draw_rect_outline(name_box_rect, arcade.color.BLACK, 2)
+        
+        # Draw entered name
+        display_name = game_state.entered_name
+        if len(display_name) == 0:
+            display_name = "Anonymous"
+        
+        arcade.draw_text(display_name, center_x, center_y, 
+                        arcade.color.BLACK, main_font_size, anchor_x="center")
+        
+        # Instructions
+        arcade.draw_text("Type your name and press ENTER", center_x, center_y - 60, 
+                        arcade.color.WHITE, small_font_size, anchor_x="center")
+        arcade.draw_text("Press BACKSPACE to delete", center_x, center_y - 80, 
+                        arcade.color.LIGHT_GRAY, small_font_size, anchor_x="center")
+    
+    def draw_high_scores_ui(self, game_state, ui_left, ui_right, ui_top, ui_bottom, title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager):
+        """Draw high scores screen"""
+        center_x = (ui_left + ui_right) / 2
+        center_y = (ui_top + ui_bottom) / 2
+        
+        # Semi-transparent overlay
+        overlay_rect = arcade.LRBT(ui_left, ui_right, ui_bottom, ui_top)
+        arcade.draw_rect_filled(overlay_rect, (0, 0, 0, 128))
+        
+        # Title
+        arcade.draw_text("HIGH SCORES", center_x, center_y + 150, 
+                        arcade.color.GOLD, title_font_size, anchor_x="center")
+        
+        # High scores list
+        if high_score_manager:
+            scores = high_score_manager.get_top_scores(10)
+            if scores:
+                start_y = center_y + 100
+                for i, score_entry in enumerate(scores):
+                    y_pos = start_y - (i * 25)
+                    
+                    # Highlight the new score if it exists
+                    color = arcade.color.WHITE
+                    if (hasattr(game_state, 'final_score') and hasattr(game_state, 'final_time') and
+                        score_entry['score'] == game_state.final_score and 
+                        abs(score_entry['time'] - game_state.final_time) < 0.01):
+                        color = arcade.color.YELLOW
+                    
+                    score_text = f"{i+1:2d}. {score_entry['name']:<15} {score_entry['score']:3d} pts  {score_entry['time']:6.2f}s"
+                    arcade.draw_text(score_text, center_x, y_pos, color, main_font_size, anchor_x="center")
+            else:
+                arcade.draw_text("No high scores yet!", center_x, center_y + 50, 
+                                arcade.color.WHITE, main_font_size, anchor_x="center")
+        
+        # Instructions
+        arcade.draw_text("Press R to play again", center_x, center_y - 150, 
+                        arcade.color.WHITE, small_font_size, anchor_x="center")
+        arcade.draw_text("Press ESC to return to game", center_x, center_y - 170, 
+                        arcade.color.LIGHT_GRAY, small_font_size, anchor_x="center") 

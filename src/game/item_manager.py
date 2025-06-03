@@ -3,15 +3,18 @@ import random
 import math
 from PIL import Image, ImageDraw
 from arcade.types import Color as ArcadeColor # Import for type hinting
-from game.player import Player # Import Player class
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from game.player import Player
 
 ITEM_RADIUS = 15
 ITEM_TYPES = {
-    "battery": {"color": arcade.color.YELLOW, "value": 1, "spawn_rate": 0.4},
-    "gear": {"color": arcade.color.GRAY, "value": 2, "spawn_rate": 0.3},
-    "gem": {"color": arcade.color.CYAN, "value": 5, "spawn_rate": 0.15},
-    "crystal": {"color": arcade.color.PURPLE, "value": 10, "spawn_rate": 0.1},
-    "power_core": {"color": arcade.color.RED, "value": 20, "spawn_rate": 0.05}
+    "battery": {"color": arcade.color.YELLOW, "value": 1, "spawn_rate": 0.4, "color_name": "yellow"},
+    "gear": {"color": arcade.color.GRAY, "value": 2, "spawn_rate": 0.3, "color_name": "gray"},
+    "gem": {"color": arcade.color.CYAN, "value": 5, "spawn_rate": 0.15, "color_name": "cyan"},
+    "crystal": {"color": arcade.color.PURPLE, "value": 10, "spawn_rate": 0.1, "color_name": "purple"},
+    "power_core": {"color": arcade.color.RED, "value": 20, "spawn_rate": 0.05, "color_name": "red"}
 }
 
 # Generation parameters
@@ -63,6 +66,7 @@ class Item(arcade.Sprite):
         self.type = item_type
         self.collected = False
         self.value = ITEM_TYPES[item_type]["value"]
+        self.color_name = ITEM_TYPES[item_type]["color_name"]
         
         self.texture = _get_item_texture(item_type)
         self.center_x = x
@@ -130,20 +134,26 @@ class ItemManager:
                 chunk_y = player_chunk[1] + dy
                 self.generate_chunk_items(chunk_x, chunk_y)
 
-    def check_collisions(self, player: Player):
+    def check_collisions(self, player: Any):
         collected_value = 0
         
         # Player is now an arcade.Sprite, so we can use check_for_collision_with_list
         collided_items = arcade.check_for_collision_with_list(player, self.item_sprite_list)
         
+        collected_items = []  # Store information about collected items
         for item_sprite in collided_items:
             # Ensure item_sprite is an instance of our Item class and not collected
             if isinstance(item_sprite, Item) and not item_sprite.collected:
                 item_sprite.collected = True
                 collected_value += item_sprite.value
+                collected_items.append({
+                    "value": item_sprite.value,
+                    "color_name": item_sprite.color_name,
+                    "type": item_sprite.type
+                })
                 item_sprite.remove_from_sprite_lists() # Remove from self.item_sprite_list and any other list it's in
         
-        return collected_value
+        return collected_value, collected_items
 
     def get_active_items_near(self, center_x, center_y, radius=1000):
         # This method might need to return a list of sprites or a temporary SpriteList for rendering
