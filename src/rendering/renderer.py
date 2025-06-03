@@ -4,6 +4,7 @@ from game.item_manager import ITEM_RADIUS, ITEM_TYPES
 from game.player import PLAYER_RADIUS
 from game.obstacle_manager import OBSTACLE_TYPES
 import logging
+from game.config import MARGIN_X, MARGIN_Y
 
 DEBUG_ENABLED = True  # Set to True to enable debug output for player drawing
 
@@ -215,12 +216,31 @@ class Renderer:
             arcade.draw_rect_outline(arcade.LRBT(piece_left, piece_right, piece_bottom, piece_top), arcade.color.BLACK, 1)
 
     def draw_ui(self, score, total_value=None, camera_x=0, camera_y=0, screen_width=800, screen_height=600):
-        """Draw the user interface that adapts to screen size"""
-        # Calculate UI position based on camera for fixed positioning
+        """Draw the user interface that adapts to screen size, and debug rectangles if enabled."""
         ui_left = camera_x - screen_width / 2
         ui_right = camera_x + screen_width / 2
         ui_top = camera_y + screen_height / 2
         ui_bottom = camera_y - screen_height / 2
+        
+        # --- DEBUG: Draw camera viewport and margin box ---
+        if DEBUG_ENABLED:
+            # Draw camera viewport (blue)
+            cam_x = camera_x
+            cam_y = camera_y
+            print(f"[DEBUG] Camera center: ({cam_x}, {cam_y})")
+            print(f"[DEBUG] Viewport: left={ui_left}, right={ui_right}, top={ui_top}, bottom={ui_bottom}")
+            # Draw and print margin box (yellow)
+            margin_x = min(MARGIN_X, screen_width * 0.25)
+            margin_y = min(MARGIN_Y, screen_height * 0.25)
+            margin_left = ui_left + margin_x
+            margin_right = ui_right - margin_x
+            margin_top = ui_top - margin_y
+            margin_bottom = ui_bottom + margin_y
+            print(f"[DEBUG] Margin: left={margin_left}, right={margin_right}, top={margin_top}, bottom={margin_bottom}")
+            viewport_rect = arcade.LRBT(ui_left, ui_right, ui_top, ui_bottom)
+            arcade.draw_rect_outline(viewport_rect, arcade.color.BLUE, 3)
+            margin_rect = arcade.LRBT(margin_left, margin_right, margin_top, margin_bottom)
+            arcade.draw_rect_outline(margin_rect, arcade.color.YELLOW, 2)
         
         # Adaptive font sizes based on screen size
         base_size = min(screen_width, screen_height)

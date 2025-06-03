@@ -9,6 +9,7 @@ from rendering.renderer import Renderer
 import logging
 import os
 import time
+from game.config import MARGIN_X, MARGIN_Y
 
 # --- Logging Configuration ---
 DEBUG_ENABLED = False  # Set to True by the user for detailed debug logging
@@ -47,8 +48,6 @@ logger = logging.getLogger(__name__) # Get logger for this module
 DEFAULT_SCREEN_WIDTH = 800
 DEFAULT_SCREEN_HEIGHT = 600
 SCREEN_TITLE = "Octo-Robot - Enhanced World"
-MARGIN_X = 200  # Margin from left/right edge
-MARGIN_Y = 150  # Margin from top/bottom edge
 
 class OctoRobotGame(arcade.Window):
     def __init__(self):
@@ -122,14 +121,6 @@ class OctoRobotGame(arcade.Window):
             logger.info(f"About to call set_fullscreen(False)")
             self.set_fullscreen(False)
             logger.info(f"set_fullscreen(False) completed. New size: {self.width}x{self.height}")
-            
-            # Explicitly update camera for new windowed mode dimensions
-            logger.info(f"Updating camera for windowed mode. Viewport from self.rect, Projection to: 0, {self.width}, 0, {self.height}")
-            self.camera.viewport = self.rect
-            self.camera.projection = LRBT(0.0, float(self.width), 0.0, float(self.height))
-            logger.info(f"Camera viewport set to: {self.camera.viewport}")
-            logger.info(f"Camera projection set to: {self.camera.projection}")
-
             self.is_fullscreen = False
         else:
             # Store current windowed size before going fullscreen
@@ -140,13 +131,6 @@ class OctoRobotGame(arcade.Window):
             self.set_fullscreen(True)
             logger.info(f"set_fullscreen(True) completed. New size: {self.width}x{self.height}")
             self.is_fullscreen = True
-
-            # Explicitly update camera for new fullscreen dimensions
-            logger.info(f"Updating camera for fullscreen mode. Viewport from self.rect, Projection to: 0, {self.width}, 0, {self.height}")
-            self.camera.viewport = self.rect
-            self.camera.projection = LRBT(0.0, float(self.width), 0.0, float(self.height))
-            logger.info(f"Camera viewport set to: {self.camera.viewport}")
-            logger.info(f"Camera projection set to: {self.camera.projection}")
 
         post_change_time = time.time()
         logger.info(f"Post-change time: {post_change_time - start_time:.4f}s")
@@ -194,11 +178,6 @@ class OctoRobotGame(arcade.Window):
         logger.info(f"Size after super().on_resize(): {self.width}x{self.height}")
         
         # Explicitly update camera for new dimensions after resize
-        logger.info(f"Updating camera after resize. Viewport from self.rect, Projection to: 0, {width}, 0, {height}")
-        self.camera.viewport = self.rect
-        self.camera.projection = LRBT(0.0, float(width), 0.0, float(height))
-        logger.info(f"Camera viewport set to: {self.camera.viewport}")
-        logger.info(f"Camera projection set to: {self.camera.projection}")
         logger.info(f"Camera position after explicit update (should be unchanged): {self.camera.position}")
         
         # Force world generation update for new screen size
@@ -325,45 +304,35 @@ class OctoRobotGame(arcade.Window):
         logger.debug(f"=== WORLD GENERATION END ===")
 
     def scroll_camera_to_player(self):
-        """Smooth camera following with margins"""
+        """Smooth camera following with margins (fixed for symmetric scrolling)"""
         screen_width, screen_height = self.get_screen_dimensions()
-        
-        # Calculate the visible area based on camera's center position
-        left_edge = self.camera.position[0] - screen_width / 2
-        right_edge = self.camera.position[0] + screen_width / 2
-        bottom_edge = self.camera.position[1] - screen_height / 2
-        top_edge = self.camera.position[1] + screen_height / 2
-        
-        # Calculate boundaries with margins (scale margins with screen size)
-        margin_x = min(MARGIN_X, screen_width * 0.25)  # Don't let margins be too large
+        margin_x = min(MARGIN_X, screen_width * 0.25)
         margin_y = min(MARGIN_Y, screen_height * 0.25)
-        
-        left_boundary = left_edge + margin_x
-        right_boundary = right_edge - margin_x
-        bottom_boundary = bottom_edge + margin_y
-        top_boundary = top_edge - margin_y
 
-        target_x = self.camera.position[0]
-        target_y = self.camera.position[1]
+        cam_x, cam_y = self.camera.position
 
-        # Check if player is outside margins and adjust camera
+        left_boundary = cam_x - (screen_width / 2) + margin_x
+        right_boundary = cam_x + (screen_width / 2) - margin_x
+        bottom_boundary = cam_y - (screen_height / 2) + margin_y
+        top_boundary = cam_y + (screen_height / 2) - margin_y
+
+        target_x, target_y = cam_x, cam_y
+
         if self.player.center_x < left_boundary:
-            target_x = self.player.center_x - margin_x + screen_width / 2
+            target_x = self.player.center_x - margin_x + (screen_width / 2)
         elif self.player.center_x > right_boundary:
-            target_x = self.player.center_x + margin_x - screen_width / 2
+            target_x = self.player.center_x + margin_x - (screen_width / 2)
 
         if self.player.center_y < bottom_boundary:
-            target_y = self.player.center_y - margin_y + screen_height / 2
+            target_y = self.player.center_y - margin_y + (screen_height / 2)
         elif self.player.center_y > top_boundary:
-            target_y = self.player.center_y + margin_y - screen_height / 2
+            target_y = self.player.center_y + margin_y - (screen_height / 2)
 
-        # Smooth camera movement for better experience
-        current_x, current_y = self.camera.position
-        lerp_factor = 0.1  # Adjust for smoother/snappier camera
-        
-        new_x = current_x + (target_x - current_x) * lerp_factor
-        new_y = current_y + (target_y - current_y) * lerp_factor
-        
+        # Smooth camera movement
+        lerp_factor = 0.1
+        new_x = cam_x + (target_x - cam_x) * lerp_factor
+        new_y = cam_y + (target_y - cam_y) * lerp_factor
+
         self.camera.position = (new_x, new_y)
 
     def on_key_press(self, key, modifiers):
