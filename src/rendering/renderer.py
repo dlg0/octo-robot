@@ -14,6 +14,23 @@ class Renderer:
         self.item_manager = item_manager
         self.obstacle_manager = obstacle_manager
         self.background_manager = background_manager
+        
+        # Cache for Text objects to improve performance
+        self.text_cache = {}
+        self.last_screen_size = (0, 0)  # Track screen size changes to update text
+
+    def _get_text_object(self, text, font_size, color=arcade.color.BLACK, anchor_x="left"):
+        """Get a cached Text object or create a new one for better performance"""
+        cache_key = (text, font_size, color, anchor_x)
+        if cache_key not in self.text_cache:
+            self.text_cache[cache_key] = arcade.Text(
+                text, 0, 0, color, font_size, anchor_x=anchor_x
+            )
+        return self.text_cache[cache_key]
+
+    def _clear_text_cache(self):
+        """Clear the text cache when screen size changes"""
+        self.text_cache.clear()
 
     def draw_background(self, camera_x=0, camera_y=0, screen_width=800, screen_height=600):
         """Draw the infinite scrolling background"""
@@ -307,36 +324,102 @@ class Renderer:
         """Draw UI elements during gameplay"""
         screen_width = ui_right - ui_left  # Calculate screen width from UI bounds
         
-        # Score display (top-left)
-        arcade.draw_text(f"Score: {game_state.score}/100", ui_left + 10, ui_top - 30, 
-                        arcade.color.BLACK, title_font_size)
+        # Check if screen size changed and clear cache if needed
+        current_size = (screen_width, ui_top - ui_bottom)
+        if current_size != self.last_screen_size:
+            self._clear_text_cache()
+            self.last_screen_size = current_size
         
-        # Timer display (top-right)
-        time_text = f"Time: {game_state.game_time:.1f}s"
-        arcade.draw_text(time_text, ui_right - 150, ui_top - 30, 
-                        arcade.color.BLACK, title_font_size)
+        # Score display (top-left) - moved lower from top edge
+        score_text = self._get_text_object(f"Score: {game_state.score}/100", title_font_size, arcade.color.BLACK)
+        score_text.x = ui_left + 20
+        score_text.y = ui_top - 50
+        score_text.draw()
         
-        # Current player color (top-center)
+        # Timer display (top-right) - moved lower and less far right
+        time_text_obj = self._get_text_object(f"Time: {game_state.game_time:.1f}s", title_font_size, arcade.color.BLACK)
+        time_text_obj.x = ui_right - 180
+        time_text_obj.y = ui_top - 50
+        time_text_obj.draw()
+        
+        # Progress bar (top-center, below score/timer)
+        progress_bar_width = min(300, screen_width * 0.4)
+        progress_bar_height = 20
+        progress_bar_x = ui_left + screen_width // 2 - progress_bar_width // 2
+        progress_bar_y = ui_top - 90
+        
+        # Progress bar background (gray border)
+        progress_bg_rect = arcade.LRBT(
+            progress_bar_x - 2, progress_bar_x + progress_bar_width + 2,
+            progress_bar_y - 2, progress_bar_y + progress_bar_height + 2
+        )
+        arcade.draw_rect_filled(progress_bg_rect, arcade.color.DARK_GRAY)
+        
+        # Progress bar inner background (white)
+        progress_inner_rect = arcade.LRBT(
+            progress_bar_x, progress_bar_x + progress_bar_width,
+            progress_bar_y, progress_bar_y + progress_bar_height
+        )
+        arcade.draw_rect_filled(progress_inner_rect, arcade.color.WHITE)
+        
+        # Progress bar fill
+        progress_percentage = min(game_state.score / 100.0, 1.0)
+        progress_fill_width = progress_bar_width * progress_percentage
+        
+        if progress_fill_width > 0:
+            # Color changes based on progress
+            if progress_percentage < 0.3:
+                fill_color = arcade.color.RED
+            elif progress_percentage < 0.6:
+                fill_color = arcade.color.ORANGE
+            elif progress_percentage < 0.9:
+                fill_color = arcade.color.YELLOW
+            else:
+                fill_color = arcade.color.GREEN
+            
+            progress_fill_rect = arcade.LRBT(
+                progress_bar_x, progress_bar_x + progress_fill_width,
+                progress_bar_y, progress_bar_y + progress_bar_height
+            )
+            arcade.draw_rect_filled(progress_fill_rect, fill_color)
+        
+        # Progress percentage text (centered on progress bar)
+        progress_text = self._get_text_object(f"{int(progress_percentage * 100)}%", main_font_size, arcade.color.BLACK, anchor_x="center")
+        progress_text.x = progress_bar_x + progress_bar_width // 2
+        progress_text.y = progress_bar_y + progress_bar_height // 2 - 6  # Center vertically
+        progress_text.draw()
+        
+        # Current player color (top-center, below progress bar)
         if hasattr(self.player, 'current_color'):
-            color_text = f"Color: {self.player.current_color.title()}"
-            arcade.draw_text(color_text, ui_left + screen_width//2 - 60, ui_top - 30,
-                            arcade.color.BLACK, main_font_size)
+            color_text = self._get_text_object(f"Color: {self.player.current_color.title()}", main_font_size, arcade.color.BLACK, anchor_x="center")
+            color_text.x = ui_left + screen_width//2
+            color_text.y = ui_top - 100
+            color_text.draw()
         
         # Goal explanation (top-left, below score)
-        arcade.draw_text("Collect dots matching your color!", ui_left + 10, ui_top - 60, 
-                        arcade.color.DARK_BLUE, main_font_size)
-        arcade.draw_text("Wrong color = color change + score reset", ui_left + 10, ui_top - 80, 
-                        arcade.color.DARK_RED, small_font_size)
+        goal_text = self._get_text_object("Collect dots matching your color!", main_font_size, arcade.color.DARK_BLUE)
+        goal_text.x = ui_left + 10
+        goal_text.y = ui_top - 120
+        goal_text.draw()
+        
+        wrong_color_text = self._get_text_object("Wrong color = color change + score reset", small_font_size, arcade.color.DARK_RED)
+        wrong_color_text.x = ui_left + 10
+        wrong_color_text.y = ui_top - 140
+        wrong_color_text.draw()
         
         # Instructions (bottom-left)
-        arcade.draw_text("Use WASD or Arrow Keys to move", ui_left + 10, ui_bottom + 60, 
-                        arcade.color.BLACK, small_font_size)
-        arcade.draw_text("Press R to reset", ui_left + 10, ui_bottom + 40, 
-                        arcade.color.BLACK, small_font_size)
-        arcade.draw_text("Press F for fullscreen", ui_left + 10, ui_bottom + 20, 
-                        arcade.color.BLACK, small_font_size)
-        arcade.draw_text("Press H to view high scores", ui_left + 10, ui_bottom + 10, 
-                        arcade.color.BLACK, small_font_size)
+        instructions = [
+            ("Use WASD or Arrow Keys to move", ui_bottom + 60),
+            ("Press R to reset", ui_bottom + 40),
+            ("Press F for fullscreen", ui_bottom + 20),
+            ("Press H to view high scores", ui_bottom + 10)
+        ]
+        
+        for instruction_text, y_pos in instructions:
+            text_obj = self._get_text_object(instruction_text, small_font_size, arcade.color.BLACK)
+            text_obj.x = ui_left + 10
+            text_obj.y = y_pos
+            text_obj.draw()
     
     def draw_game_over_ui(self, game_state, ui_left, ui_right, ui_top, ui_bottom, title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager):
         """Draw game over screen"""

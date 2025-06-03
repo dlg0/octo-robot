@@ -5,14 +5,13 @@ from .player import Player
 from .item_manager import ItemManager
 from .obstacle_manager import ObstacleManager
 from .background_manager import BackgroundManager
-from .game_state import GameStateManager, GameState
-from .high_score_manager import HighScoreManager
 from rendering.renderer import Renderer
 import logging
 import os
 import time
 from game.config import MARGIN_X, MARGIN_Y
-import math
+from game.game_state import GameStateManager, GameState
+from game.high_score_manager import HighScoreManager
 
 # --- Logging Configuration ---
 DEBUG_ENABLED = False  # Set to True by the user for detailed debug logging
@@ -48,13 +47,9 @@ logging.basicConfig(level=_log_level, handlers=_log_handlers)
 logger = logging.getLogger(__name__) # Get logger for this module
 # --- End of Logging Configuration ---
 
-DEFAULT_SCREEN_WIDTH = 800
-DEFAULT_SCREEN_HEIGHT = 600
+DEFAULT_SCREEN_WIDTH = 1400
+DEFAULT_SCREEN_HEIGHT = 1200
 SCREEN_TITLE = "Octo-Robot - Enhanced World"
-
-# Fullscreen constants
-FULLSCREEN_WIDTH = 1920
-FULLSCREEN_HEIGHT = 1080
 
 class OctoRobotGame(arcade.Window):
     def __init__(self):
@@ -67,11 +62,6 @@ class OctoRobotGame(arcade.Window):
         self.is_fullscreen = False
         self.windowed_size = (DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT)
         
-        # Logical screen dimensions - this is what the game thinks the screen size is
-        # This can be different from actual window size to handle fullscreen scaling
-        self.logical_width = DEFAULT_SCREEN_WIDTH
-        self.logical_height = DEFAULT_SCREEN_HEIGHT
-        
         # Initialize game systems
         self.player = Player()
         print("Player class:", type(self.player), "module:", type(self.player).__module__)
@@ -79,8 +69,8 @@ class OctoRobotGame(arcade.Window):
         self.obstacle_manager = ObstacleManager()
         self.background_manager = BackgroundManager()
         
-        # Initialize new game systems
-        self.game_state = GameStateManager()
+        # Initialize game state and score management
+        self.game_state_manager = GameStateManager()
         self.high_score_manager = HighScoreManager()
         
         # Initialize renderer with all managers
@@ -91,14 +81,10 @@ class OctoRobotGame(arcade.Window):
             self.background_manager
         )
         
-        # Legacy game state (keeping for compatibility with old UI calls)
+        # Game state
         self.score = 0
         self.total_value = 0
         self.camera = Camera2D()
-        
-        # Store original window dimensions for projection scaling
-        self.original_width = DEFAULT_SCREEN_WIDTH
-        self.original_height = DEFAULT_SCREEN_HEIGHT
         
         # Performance and rendering
         self.set_update_rate(1/60)
@@ -106,7 +92,6 @@ class OctoRobotGame(arcade.Window):
         
         logger.info(f"=== GAME INITIALIZATION COMPLETE ===")
         logger.info(f"Final window size: {self.width}x{self.height}")
-        logger.info(f"Logical screen size: {self.logical_width}x{self.logical_height}")
         logger.info(f"Camera initialized at: {self.camera.position}")
 
     def setup(self):
@@ -115,9 +100,9 @@ class OctoRobotGame(arcade.Window):
         self.item_manager.reset()
         self.obstacle_manager.reset()
         self.background_manager.reset()
-        self.game_state.reset_game()
+        self.game_state_manager.set_state(GameState.PLAYING)
         
-        # Legacy compatibility
+        # Legacy state (keep for compatibility during transition)
         self.score = 0
         self.total_value = 0
         self.camera.position = (0, 0)
@@ -133,7 +118,6 @@ class OctoRobotGame(arcade.Window):
         logger.info(f"=== FULLSCREEN TOGGLE START ===")
         logger.info(f"Timestamp: {start_time}")
         logger.info(f"Current state - fullscreen: {self.is_fullscreen}, size: {self.width}x{self.height}")
-        logger.info(f"Current logical size: {self.logical_width}x{self.logical_height}")
         logger.info(f"Camera position: {self.camera.position}")
         logger.info(f"Player position: ({self.player.center_x}, {self.player.center_y})")
         
@@ -142,55 +126,51 @@ class OctoRobotGame(arcade.Window):
         
         if self.is_fullscreen:
             # Switch to windowed mode
-            logger.info("Switching to windowed mode")
+            logger.info(f"Switching to windowed mode. Current windowed_size target: {self.windowed_size}")
+            logger.info(f"About to call set_fullscreen(False)")
             self.set_fullscreen(False)
-            self.set_size(self.original_width, self.original_height)
+            logger.info(f"set_fullscreen(False) completed. New size: {self.width}x{self.height}")
+            # Update camera viewport to match new window size
+            self.camera.viewport = self.rect
             self.is_fullscreen = False
-            
-            # Reset logical dimensions to original windowed size
-            self.logical_width = self.original_width
-            self.logical_height = self.original_height
-            
-            # Reset camera zoom to 1.0
-            self.camera.zoom = 1.0
-            
-            logger.info(f"Reset logical dimensions to: {self.logical_width}x{self.logical_height}")
-            
         else:
+            # Store current windowed size before going fullscreen
+            self.windowed_size = (self.width, self.height)
+            logger.info(f"Storing windowed size: {self.windowed_size}")
             # Switch to fullscreen mode
-            logger.info("Switching to fullscreen mode")
+            logger.info("About to call set_fullscreen(True)")
             self.set_fullscreen(True)
+            logger.info(f"set_fullscreen(True) completed. New size: {self.width}x{self.height}")
             self.is_fullscreen = True
-            
-            # Update logical dimensions to match actual fullscreen size
-            # This makes the game think the screen is actually bigger
-            self.logical_width = self.width
-            self.logical_height = self.height
-            
-            # Keep camera zoom at 1.0 - no need for zoom tricks
-            self.camera.zoom = 1.0
-            
-            logger.info(f"Updated logical dimensions to: {self.logical_width}x{self.logical_height}")
-            logger.info(f"Game now thinks screen is {self.logical_width}x{self.logical_height} instead of {self.original_width}x{self.original_height}")
-        
-        # Update camera viewport to match new window size
-        self.camera.viewport = self.rect
-        logger.info(f"Updated camera viewport to: {self.camera.viewport}")
-        
+            # Update camera viewport to match new window size
+            self.camera.viewport = self.rect
+
         post_change_time = time.time()
-        logger.info(f"Screen change took: {post_change_time - pre_change_time:.4f}s")
-        logger.info(f"New state - fullscreen: {self.is_fullscreen}, size: {self.width}x{self.height}")
-        logger.info(f"New logical size: {self.logical_width}x{self.logical_height}")
-        logger.info(f"Camera position after change: {self.camera.position}")
+        logger.info(f"Post-change time: {post_change_time - start_time:.4f}s")
+        logger.info(f"After toggle - fullscreen: {self.is_fullscreen}, size: {self.width}x{self.height}")
         
-        # Force world generation update for new screen size
-        logger.info("Triggering world generation from fullscreen toggle")
+        # Check window properties
+        logger.info(f"Window properties - width: {self.width}, height: {self.height}")
+        try:
+            logger.info(f"Window fullscreen property: {self.fullscreen}")
+        except:
+            pass
+        
+        # Force IMMEDIATE and aggressive world generation for new screen size
+        # This prevents unrendered areas when switching screen modes
+        logger.info("Triggering IMMEDIATE world generation update")
         world_gen_start = time.time()
-        self.update_world_generation()
+        
+        # Generate multiple times to ensure coverage for larger screen
+        for i in range(3):
+            logger.info(f"World generation pass {i+1}/3")
+            self.update_world_generation()
+        
         world_gen_time = time.time() - world_gen_start
         logger.info(f"World generation took: {world_gen_time:.4f}s")
         
-        total_time = time.time() - start_time
+        end_time = time.time()
+        total_time = end_time - start_time
         logger.info(f"=== FULLSCREEN TOGGLE END - Total time: {total_time:.4f}s ===")
     
     def on_resize(self, width, height):
@@ -228,16 +208,16 @@ class OctoRobotGame(arcade.Window):
         logger.info(f"=== RESIZE EVENT END - Total time: {resize_total:.4f}s ===")
 
     def get_screen_dimensions(self):
-        """Get current logical screen dimensions (what the game thinks the screen size is)"""
-        dimensions = (self.logical_width, self.logical_height)
-        logger.debug(f"Logical screen dimensions: {dimensions} (actual window: {self.width}x{self.height})")
+        """Get current screen dimensions"""
+        dimensions = (self.width, self.height)
+        logger.debug(f"Screen dimensions: {dimensions}")
         return dimensions
 
     def on_draw(self):
         """Render the game"""
         import time
         frame_start = time.time()
-        DEBUG_ENABLED = False  # Set to False to reduce debug spam
+        DEBUG_ENABLED = False  # Set to True to print camera position for debugging
         
         logger.debug(f"=== DRAW FRAME START ===")
         logger.debug(f"Frame timestamp: {frame_start}")
@@ -290,17 +270,10 @@ class OctoRobotGame(arcade.Window):
         player_time = time.time() - player_start
         logger.debug(f"Player draw took: {player_time:.6f}s")
         
-        # Draw UI with new game state system
+        # Draw UI (it will handle its own positioning)
         ui_start = time.time()
         logger.debug("Drawing UI")
-        self.renderer.draw_ui(
-            game_state=self.game_state,
-            camera_x=camera_x, 
-            camera_y=camera_y, 
-            screen_width=screen_width, 
-            screen_height=screen_height,
-            high_score_manager=self.high_score_manager
-        )
+        self.renderer.draw_ui(self.game_state_manager, camera_x, camera_y, screen_width, screen_height, self.high_score_manager)
         ui_time = time.time() - ui_start
         logger.debug(f"UI draw took: {ui_time:.6f}s")
         
@@ -309,58 +282,51 @@ class OctoRobotGame(arcade.Window):
 
     def on_update(self, delta_time):
         """Update game logic"""
-        # Update game timer
-        self.game_state.update_game_time(delta_time)
+        # Update game state time
+        if self.game_state_manager.is_playing():
+            self.game_state_manager.update_game_time(delta_time)
         
-        # Only update gameplay if in playing state
-        if self.game_state.is_playing():
-            # Update player with obstacle collision detection
-            self.player.update(self.obstacle_manager)
-            
-            # Debug: Show player position and current color
-            if hasattr(self, '_debug_counter'):
-                self._debug_counter += 1
-            else:
-                self._debug_counter = 0
+        # Update player with obstacle collision detection
+        self.player.update(self.obstacle_manager)
+        
+        # Check item collections
+        collected_result = self.item_manager.check_collisions(self.player)
+        if isinstance(collected_result, tuple):
+            collected_value, collected_items = collected_result
+        else:
+            # Fallback for backward compatibility
+            collected_value = collected_result
+            collected_items = []
+        
+        if collected_value > 0:
+            # Process each collected item for color matching
+            for item_info in collected_items:
+                item_color = item_info["color_name"]
+                item_value = item_info["value"]
+                item_type = item_info["type"]
                 
-            # Print debug info every 60 frames (once per second at 60fps)
-            if self._debug_counter % 60 == 0:
-                print(f"[DEBUG] Player at ({self.player.center_x:.1f}, {self.player.center_y:.1f}), color: {self.player.current_color}")
-                # Check nearby items
-                nearby_items = self.item_manager.get_active_items_near(self.player.center_x, self.player.center_y, 100)
-                print(f"[DEBUG] {len(nearby_items)} items within 100 units")
-                if len(nearby_items) > 0:
-                    closest = min(nearby_items, key=lambda item: ((item.center_x - self.player.center_x)**2 + (item.center_y - self.player.center_y)**2)**0.5)
-                    distance = ((closest.center_x - self.player.center_x)**2 + (closest.center_y - self.player.center_y)**2)**0.5
-                    print(f"[DEBUG] Closest item: {closest.type} ({closest.color_name}) at distance {distance:.1f}")
+                print(f"[GAME] Collected {item_type} (color: {item_color}) - Player color: {self.player.current_color}")
+                
+                # Check if item color matches player color
+                if item_color == self.player.current_color:
+                    # Matching color: add points
+                    self.game_state_manager.add_score(item_value)
+                    print(f"[GAME] Color match! Adding {item_value} points")
+                else:
+                    # Wrong color: change player color and reset score
+                    print(f"[GAME] Color mismatch! Changing player color from {self.player.current_color} to {item_color} and resetting score")
+                    self.player.change_color(item_color)
+                    self.game_state_manager.reset_score()
             
-            # Check item collections with new color-based logic
-            collected_value, collected_items = self.item_manager.check_collisions(self.player)
-            if collected_items:
-                for item in collected_items:
-                    print(f"[GAME] Collected {item['type']} (color: {item['color_name']}) - Player color: {self.player.current_color}")
-                    # Check if item color matches player color
-                    if item["color_name"] == self.player.current_color:
-                        # Correct color - add points
-                        print(f"[GAME] Color match! Adding {item['value']} points")
-                        self.game_state.add_score(item["value"])
-                        # Update legacy score for compatibility
-                        self.score = self.game_state.score
-                        self.total_value += item["value"]
-                    else:
-                        # Wrong color - change player color and reset score
-                        print(f"[GAME] Color mismatch! Changing player color from {self.player.current_color} to {item['color_name']} and resetting score")
-                        self.player.change_color(item["color_name"])
-                        self.game_state.reset_score()
-                        # Update legacy score for compatibility
-                        self.score = 0
-                        self.total_value = 0
-            
-            # Update camera to follow player
-            self.scroll_camera_to_player()
-            
-            # Generate world content around player
-            self.update_world_generation()
+            # Check if player reached the goal
+            if self.game_state_manager.score >= 100:
+                self.game_state_manager.complete_game()
+        
+        # Update camera to follow player
+        self.scroll_camera_to_player()
+        
+        # Generate world content around player
+        self.update_world_generation()
 
     def update_world_generation(self):
         """Update procedural generation around the player"""
@@ -422,9 +388,8 @@ class OctoRobotGame(arcade.Window):
         logger.debug(f"Key: {key}, Modifiers: {modifiers}")
         logger.debug(f"Current window state - fullscreen: {self.is_fullscreen}, size: {self.width}x{self.height}")
         
-        # Handle different input based on game state
-        if self.game_state.is_playing():
-            # Normal gameplay controls
+        # Handle different game states
+        if self.game_state_manager.is_playing():
             self.player.on_key_press(key, modifiers)
             
             # Reset game with R key
@@ -439,60 +404,55 @@ class OctoRobotGame(arcade.Window):
             
             # View high scores with H key
             elif key == arcade.key.H:
-                self.game_state.set_state(GameState.HIGH_SCORES)
+                self.game_state_manager.show_high_scores()
         
-        elif self.game_state.is_game_over():
-            # Game over screen controls
+        elif self.game_state_manager.is_game_over():
             if key == arcade.key.ENTER:
                 # Check if it's a high score
-                if self.high_score_manager.is_high_score(self.game_state.final_score, self.game_state.final_time):
-                    self.game_state.set_state(GameState.NAME_ENTRY)
+                if self.high_score_manager.is_high_score(self.game_state_manager.final_score, self.game_state_manager.final_time):
+                    self.game_state_manager.start_name_entry()
                 else:
-                    self.game_state.set_state(GameState.HIGH_SCORES)
+                    self.setup()  # Restart game
             elif key == arcade.key.R:
-                self.setup()  # Start new game
+                self.setup()  # Restart game
             elif key == arcade.key.H:
-                self.game_state.set_state(GameState.HIGH_SCORES)
+                self.game_state_manager.show_high_scores()
         
-        elif self.game_state.is_name_entry():
-            # Name entry controls
+        elif self.game_state_manager.is_name_entry():
             if key == arcade.key.ENTER:
                 # Save the high score and show high scores
-                position = self.high_score_manager.add_score(
-                    self.game_state.entered_name or "Anonymous",
-                    self.game_state.final_score,
-                    self.game_state.final_time
-                )
-                self.game_state.score_position = position
-                self.game_state.confirm_name()
+                name = self.game_state_manager.entered_name if self.game_state_manager.entered_name else "Anonymous"
+                self.high_score_manager.add_score(name, self.game_state_manager.final_score, self.game_state_manager.final_time)
+                self.game_state_manager.show_high_scores()
             elif key == arcade.key.BACKSPACE:
-                self.game_state.remove_name_character()
+                # Remove last character
+                if self.game_state_manager.entered_name:
+                    self.game_state_manager.entered_name = self.game_state_manager.entered_name[:-1]
             else:
-                # Handle character input
-                if hasattr(arcade.key, 'A') and key >= arcade.key.A and key <= arcade.key.Z:
-                    # Letter keys
-                    char = chr(key).lower()
-                    if modifiers & arcade.key.MOD_SHIFT:
-                        char = char.upper()
-                    self.game_state.add_name_character(char)
-                elif key == arcade.key.SPACE:
-                    self.game_state.add_name_character(" ")
-                elif key >= arcade.key.KEY_0 and key <= arcade.key.KEY_9:
-                    # Number keys
-                    char = str(key - arcade.key.KEY_0)
-                    self.game_state.add_name_character(char)
+                # Add character to name (limit to reasonable characters and length)
+                if len(self.game_state_manager.entered_name) < 15:
+                    char = None
+                    if 32 <= key <= 126:  # Printable ASCII characters
+                        char = chr(key)
+                    elif key == arcade.key.SPACE:
+                        char = ' '
+                    
+                    if char and char.isprintable():
+                        # Handle shift for uppercase
+                        if modifiers & arcade.key.MOD_SHIFT:
+                            char = char.upper()
+                        else:
+                            char = char.lower()
+                        self.game_state_manager.entered_name += char
         
-        elif self.game_state.is_high_scores():
-            # High scores screen controls
+        elif self.game_state_manager.is_high_scores():
             if key == arcade.key.R:
-                self.setup()  # Start new game
+                self.setup()  # Restart game
             elif key == arcade.key.ESCAPE:
-                self.game_state.set_state(GameState.PLAYING)
+                self.game_state_manager.start_playing()  # Return to game
         
         logger.debug(f"=== KEY PRESS EVENT END ===")
 
     def on_key_release(self, key, modifiers):
         """Handle key release events"""
-        # Only handle player movement releases during gameplay
-        if self.game_state.is_playing():
-            self.player.on_key_release(key, modifiers) 
+        self.player.on_key_release(key, modifiers) 

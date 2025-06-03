@@ -102,4 +102,16 @@ class GameStateManager:
         return self.current_state == GameState.HIGH_SCORES
     
     def is_paused(self) -> bool:
-        return self.current_state == GameState.PAUSED 
+        return self.current_state == GameState.PAUSED
+    
+    def start_playing(self):
+        """Start or resume playing state"""
+        self.set_state(GameState.PLAYING)
+    
+    def show_high_scores(self):
+        """Show the high scores screen"""
+        self.set_state(GameState.HIGH_SCORES)
+    
+    def start_name_entry(self):
+        """Start name entry for high score"""
+        self.set_state(GameState.NAME_ENTRY) 
