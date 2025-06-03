@@ -149,12 +149,15 @@ class ObstacleManager:
         self.generated_chunks = set()
         self.chunk_obstacles = {}
         self.obstacle_sprite_list = arcade.SpriteList(use_spatial_hash=True)
+        # Track which obstacles are currently being collided with
+        self.colliding_obstacles = set()  # Set of obstacle sprites currently in collision
         
     def reset(self):
         self.obstacles = []
         self.generated_chunks = set()
         self.chunk_obstacles = {}
         self.obstacle_sprite_list.clear()
+        self.colliding_obstacles.clear()
 
     def get_chunk_key(self, x, y):
         chunk_x = int(x // CHUNK_SIZE)
@@ -220,6 +223,9 @@ class ObstacleManager:
 
     def check_collision(self, sprite_to_check: arcade.Sprite) -> Obstacle | None:
         """Check if a sprite collides with any obstacle. Returns the collided obstacle sprite or None."""
+        # Clear previous collision tracking for this check
+        self.colliding_obstacles.clear()
+        
         # Player is a sprite, so we can use check_for_collision_with_list
         # This method is called by Player.update()
         # The player sprite itself has .center_x, .center_y, .width, .height
@@ -244,13 +250,19 @@ class ObstacleManager:
 
         collided_obstacle_list = arcade.check_for_collision_with_list(sprite_to_check, nearby_obstacles_to_check)
         
-        if collided_obstacle_list:
-            # Return the first collided obstacle (it's an Obstacle sprite)
-            # Ensure it's an instance of our Obstacle class if other sprites might be in these lists.
-            collided_obs = collided_obstacle_list[0]
+        # Track ALL colliding obstacles, not just the first one
+        collision_result = None
+        for collided_obs in collided_obstacle_list:
             if isinstance(collided_obs, Obstacle):
-                 return collided_obs 
-        return None
+                self.colliding_obstacles.add(collided_obs)
+                if collision_result is None:  # Return the first one for backward compatibility
+                    collision_result = collided_obs
+        
+        return collision_result
+    
+    def get_colliding_obstacles(self):
+        """Get all obstacles currently being collided with"""
+        return self.colliding_obstacles.copy()
 
     def get_active_obstacles_near(self, center_x, center_y, radius=1000):
         # This method is used by renderer. If renderer draws the main SpriteList, this might not be needed

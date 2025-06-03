@@ -153,6 +153,32 @@ class Renderer:
         # The ObstacleManager now handles its own SpriteList for drawing.
         if self.obstacle_manager and hasattr(self.obstacle_manager, 'obstacle_sprite_list'):
             self.obstacle_manager.obstacle_sprite_list.draw()
+            
+            # Draw red boundaries around colliding obstacles
+            if hasattr(self.obstacle_manager, 'get_colliding_obstacles'):
+                colliding_obstacles = self.obstacle_manager.get_colliding_obstacles()
+                for obstacle in colliding_obstacles:
+                    # Draw a thick red circle outline around the colliding obstacle
+                    if hasattr(obstacle, 'radius'):
+                        # Draw multiple circles for a thicker appearance
+                        for width in range(1, 4):
+                            arcade.draw_circle_outline(
+                                obstacle.center_x, 
+                                obstacle.center_y, 
+                                obstacle.radius + width, 
+                                arcade.color.RED, 
+                                border_width=1
+                            )
+                    else:
+                        # Fallback: draw around the sprite's bounds
+                        arcade.draw_rectangle_outline(
+                            obstacle.center_x,
+                            obstacle.center_y,
+                            obstacle.width + 6,
+                            obstacle.height + 6,
+                            arcade.color.RED,
+                            border_width=3
+                        )
         else:
             # Fallback or error, e.g., if obstacle_manager is None or not set up with a sprite list
             pass # Consider logging an error or warning here if in debug mode
