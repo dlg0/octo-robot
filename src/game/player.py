@@ -1,8 +1,8 @@
 import arcade
 import math
 from PIL import Image, ImageDraw # For texture generation
+from .config import PLAYER_SPEED
 
-PLAYER_SPEED = 10 
 PLAYER_RADIUS = 25
 START_X = 100
 START_Y = 100
