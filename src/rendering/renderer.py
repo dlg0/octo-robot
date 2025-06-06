@@ -5,6 +5,7 @@ from game.player import PLAYER_RADIUS
 from game.obstacle_manager import OBSTACLE_TYPES
 import logging
 from game.config import MARGIN_X, MARGIN_Y
+from game.game_mode import GameMode
 
 DEBUG_ENABLED = False  # Set to True to enable debug output for player drawing
 
@@ -266,60 +267,6 @@ class Renderer:
             arcade.draw_rect_filled(arcade.LRBT(piece_left, piece_right, piece_bottom, piece_top), color)
             arcade.draw_rect_outline(arcade.LRBT(piece_left, piece_right, piece_bottom, piece_top), arcade.color.BLACK, 1)
 
-    def draw_ui(self, game_state=None, camera_x=0, camera_y=0, screen_width=800, screen_height=600, high_score_manager=None):
-        """Draw the user interface that adapts to screen size and game state."""
-        ui_left = camera_x - screen_width / 2
-        ui_right = camera_x + screen_width / 2
-        ui_top = camera_y + screen_height / 2
-        ui_bottom = camera_y - screen_height / 2
-        
-        # --- DEBUG: Draw camera viewport and margin box ---
-        if DEBUG_ENABLED:
-            # Draw camera viewport (blue)
-            cam_x = camera_x
-            cam_y = camera_y
-            print(f"[DEBUG] Camera center: ({cam_x}, {cam_y})")
-            print(f"[DEBUG] Viewport: left={ui_left}, right={ui_right}, top={ui_top}, bottom={ui_bottom}")
-            # Draw and print margin box (yellow)
-            margin_x = min(MARGIN_X, screen_width * 0.25)
-            margin_y = min(MARGIN_Y, screen_height * 0.25)
-            margin_left = ui_left + margin_x
-            margin_right = ui_right - margin_x
-            margin_top = ui_top - margin_y
-            margin_bottom = ui_bottom + margin_y
-            print(f"[DEBUG] Margin: left={margin_left}, right={margin_right}, top={margin_top}, bottom={margin_bottom}")
-            viewport_rect = arcade.LRBT(ui_left, ui_right, ui_top, ui_bottom)
-            arcade.draw_rect_outline(viewport_rect, arcade.color.BLUE, 3)
-            margin_rect = arcade.LRBT(margin_left, margin_right, margin_top, margin_bottom)
-            arcade.draw_rect_outline(margin_rect, arcade.color.YELLOW, 2)
-        
-        # Adaptive font sizes based on screen size
-        base_size = min(screen_width, screen_height)
-        title_font_size = max(20, int(base_size * 0.035))
-        large_font_size = max(18, int(base_size * 0.03))
-        main_font_size = max(14, int(base_size * 0.02))
-        small_font_size = max(12, int(base_size * 0.015))
-        
-        if game_state is None:
-            # Fallback to old UI if no game state provided
-            arcade.draw_text("No game state provided", ui_left + 10, ui_top - 30, 
-                            arcade.color.RED, main_font_size)
-            return
-        
-        # Draw different UI based on game state
-        if game_state.is_playing():
-            self.draw_playing_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
-                               title_font_size, main_font_size, small_font_size)
-        elif game_state.is_game_over():
-            self.draw_game_over_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
-                                 title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager)
-        elif game_state.is_name_entry():
-            self.draw_name_entry_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
-                                   title_font_size, large_font_size, main_font_size, small_font_size)
-        elif game_state.is_high_scores():
-            self.draw_high_scores_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
-                                   title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager)
-    
     def draw_playing_ui(self, game_state, ui_left, ui_right, ui_top, ui_bottom, title_font_size, main_font_size, small_font_size):
         """Draw UI elements during gameplay"""
         screen_width = ui_right - ui_left  # Calculate screen width from UI bounds
@@ -341,6 +288,12 @@ class Renderer:
         time_text_obj.x = ui_right - 180
         time_text_obj.y = ui_top - 50
         time_text_obj.draw()
+
+        # Current mode display (top-center)
+        mode_text = self._get_text_object(f"Mode: {game_state.get_current_mode().value.title()}", main_font_size, arcade.color.BLACK, anchor_x="center")
+        mode_text.x = ui_left + screen_width // 2
+        mode_text.y = ui_top - 50
+        mode_text.draw()
         
         # Progress bar (top-center, below score/timer)
         progress_bar_width = min(300, screen_width * 0.4)
@@ -546,4 +499,87 @@ class Renderer:
         arcade.draw_text("Press R to play again", center_x, center_y - 150, 
                         arcade.color.WHITE, small_font_size, anchor_x="center")
         arcade.draw_text("Press ESC to return to game", center_x, center_y - 170, 
-                        arcade.color.LIGHT_GRAY, small_font_size, anchor_x="center") 
+                        arcade.color.LIGHT_GRAY, small_font_size, anchor_x="center")
+
+    def draw_mode_selection_ui(self, game_state, ui_left, ui_right, ui_top, ui_bottom, title_font_size, large_font_size, main_font_size, small_font_size):
+        """Draw mode selection screen"""
+        center_x = (ui_left + ui_right) / 2
+        center_y = (ui_top + ui_bottom) / 2
+        
+        # Semi-transparent overlay
+        overlay_rect = arcade.LRBT(ui_left, ui_right, ui_bottom, ui_top)
+        arcade.draw_rect_filled(overlay_rect, (0, 0, 0, 128))
+        
+        # Title
+        arcade.draw_text("SELECT GAME MODE", center_x, center_y + 150, 
+                        arcade.color.GOLD, title_font_size, anchor_x="center")
+        
+        # Mode options
+        modes = [
+            ("Fletchy Mode (Easy)", GameMode.FLETCHY),
+            ("Spency Mode (Normal)", GameMode.SPENCY),
+            ("Charlie Mode (Hard)", GameMode.CHARLIE)
+        ]
+        
+        start_y = center_y + 100
+        for i, (mode_name, mode) in enumerate(modes):
+            y_pos = start_y - (i * 50)
+            
+            # Highlight current mode
+            color = arcade.color.YELLOW if mode == game_state.get_current_mode() else arcade.color.WHITE
+            
+            # Draw mode name
+            arcade.draw_text(mode_name, center_x, y_pos, color, large_font_size, anchor_x="center")
+            
+            # Draw mode description
+            if mode == GameMode.FLETCHY:
+                desc = "Half the margin - easier gameplay"
+            elif mode == GameMode.SPENCY:
+                desc = "Default margin - balanced gameplay"
+            else:  # Charlie mode
+                desc = "Double the margin - challenging gameplay"
+            
+            arcade.draw_text(desc, center_x, y_pos - 25, arcade.color.LIGHT_GRAY, small_font_size, anchor_x="center")
+        
+        # Instructions
+        arcade.draw_text("Press 1-3 to select mode", center_x, center_y - 150, 
+                        arcade.color.WHITE, small_font_size, anchor_x="center")
+        arcade.draw_text("Press ESC to return to game", center_x, center_y - 170, 
+                        arcade.color.LIGHT_GRAY, small_font_size, anchor_x="center")
+
+    def draw_ui(self, game_state=None, camera_x=0, camera_y=0, screen_width=800, screen_height=600, high_score_manager=None):
+        """Draw the user interface that adapts to screen size and game state."""
+        ui_left = camera_x - screen_width / 2
+        ui_right = camera_x + screen_width / 2
+        ui_top = camera_y + screen_height / 2
+        ui_bottom = camera_y - screen_height / 2
+        
+        # Adaptive font sizes based on screen size
+        base_size = min(screen_width, screen_height)
+        title_font_size = max(20, int(base_size * 0.035))
+        large_font_size = max(18, int(base_size * 0.03))
+        main_font_size = max(14, int(base_size * 0.02))
+        small_font_size = max(12, int(base_size * 0.015))
+        
+        if game_state is None:
+            # Fallback to old UI if no game state provided
+            arcade.draw_text("No game state provided", ui_left + 10, ui_top - 30, 
+                            arcade.color.RED, main_font_size)
+            return
+        
+        # Draw different UI based on game state
+        if game_state.is_playing():
+            self.draw_playing_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
+                               title_font_size, main_font_size, small_font_size)
+        elif game_state.is_game_over():
+            self.draw_game_over_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
+                                 title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager)
+        elif game_state.is_name_entry():
+            self.draw_name_entry_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
+                                   title_font_size, large_font_size, main_font_size, small_font_size)
+        elif game_state.is_high_scores():
+            self.draw_high_scores_ui(game_state, ui_left, ui_right, ui_top, ui_bottom, 
+                                   title_font_size, large_font_size, main_font_size, small_font_size, high_score_manager)
+        elif game_state.is_mode_selection():
+            self.draw_mode_selection_ui(game_state, ui_left, ui_right, ui_top, ui_bottom,
+                                      title_font_size, large_font_size, main_font_size, small_font_size) 

@@ -12,6 +12,7 @@ import time
 from game.config import MARGIN_X, MARGIN_Y
 from game.game_state import GameStateManager, GameState
 from game.high_score_manager import HighScoreManager
+from game.game_mode import GameMode
 
 # --- Logging Configuration ---
 DEBUG_ENABLED = False  # Set to True by the user for detailed debug logging
@@ -353,8 +354,11 @@ class OctoRobotGame(arcade.Window):
     def scroll_camera_to_player(self):
         """Smooth camera following with margins (fixed for symmetric scrolling)"""
         screen_width, screen_height = self.get_screen_dimensions()
-        margin_x = min(MARGIN_X, screen_width * 0.25)
-        margin_y = min(MARGIN_Y, screen_height * 0.25)
+        
+        # Apply mode-specific margin multiplier
+        margin_multiplier = GameMode.get_margin_multiplier(self.game_state_manager.get_current_mode())
+        margin_x = min(MARGIN_X * margin_multiplier, screen_width * 0.25)
+        margin_y = min(MARGIN_Y * margin_multiplier, screen_height * 0.25)
 
         cam_x, cam_y = self.camera.position
 
@@ -388,6 +392,23 @@ class OctoRobotGame(arcade.Window):
         logger.debug(f"Key: {key}, Modifiers: {modifiers}")
         logger.debug(f"Current window state - fullscreen: {self.is_fullscreen}, size: {self.width}x{self.height}")
         
+        # Handle mode selection
+        if key == arcade.key.M:
+            self.game_state_manager.show_mode_selection()
+        elif self.game_state_manager.is_mode_selection():
+            if key == arcade.key.KEY_1:
+                self.game_state_manager.set_game_mode(GameMode.FLETCHY)
+                self.game_state_manager.start_playing()
+            elif key == arcade.key.KEY_2:
+                self.game_state_manager.set_game_mode(GameMode.SPENCY)
+                self.game_state_manager.start_playing()
+            elif key == arcade.key.KEY_3:
+                self.game_state_manager.set_game_mode(GameMode.CHARLIE)
+                self.game_state_manager.start_playing()
+            elif key == arcade.key.ESCAPE:
+                self.game_state_manager.start_playing()
+            return
+
         # Handle different game states
         if self.game_state_manager.is_playing():
             self.player.on_key_press(key, modifiers)

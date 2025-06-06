@@ -2,6 +2,7 @@
 name = "octo-robot"
 version = "0.1.0"
 description = "A 2D adventure game where a robotic octopus explores, collects, and upgrades."
+requires-python = ">=3.10"
 dependencies = [
     "arcade>=3.2.0",
 ]

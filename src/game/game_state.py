@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Optional
+from .game_mode import GameMode
 
 class GameState(Enum):
     PLAYING = "playing"
@@ -7,6 +8,7 @@ class GameState(Enum):
     NAME_ENTRY = "name_entry"
     HIGH_SCORES = "high_scores"
     PAUSED = "paused"
+    MODE_SELECTION = "mode_selection"  # New state for mode selection
 
 class GameStateManager:
     def __init__(self):
@@ -26,6 +28,8 @@ class GameStateManager:
         self.final_score = 0
         self.final_time = 0.0
         self.score_position = 0  # Position in high score list (0 if not in top 10)
+        
+        self.current_mode = GameMode.SPENCY  # Default to Spency mode
         
     def set_state(self, new_state: GameState):
         """Change to a new game state"""
@@ -114,4 +118,19 @@ class GameStateManager:
     
     def start_name_entry(self):
         """Start name entry for high score"""
-        self.set_state(GameState.NAME_ENTRY) 
+        self.set_state(GameState.NAME_ENTRY)
+    
+    def set_game_mode(self, mode: GameMode):
+        """Set the current game mode"""
+        self.current_mode = mode
+    
+    def get_current_mode(self) -> GameMode:
+        """Get the current game mode"""
+        return self.current_mode
+    
+    def is_mode_selection(self) -> bool:
+        return self.current_state == GameState.MODE_SELECTION
+    
+    def show_mode_selection(self):
+        """Show the mode selection screen"""
+        self.set_state(GameState.MODE_SELECTION) 
